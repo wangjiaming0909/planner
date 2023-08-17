@@ -4,6 +4,6 @@
 #include "postgres.h"
 #include "nodes/parsenodes.h"
 
-void print_query(Query* query, const char* prefix);
+void print_query(Query* query);
 
 #endif
