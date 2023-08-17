@@ -1,5 +1,6 @@
 #include "utils.h"
 #include "storage/lockdefs.h"
+#include <jansson.h>
 
 static char rel_kind_map['z' - 'A' + 1][32] = {"",
                                                "",
@@ -138,59 +139,126 @@ static const char *get_join_type_str(JoinType join_type) {
   }
 }
 
-static char *print_colnames(const List *colnames) {
-  ListCell *lc;
-  String *col_name;
-  char *buffer = palloc(1024);
-  int len = 0;
-  foreach (lc, colnames) {
-    col_name = lfirst_node(String, lc);
-    if (len + strlen(col_name->sval) >= 1024) break;
-    len += sprintf(buffer + len, "%s, ", col_name->sval);
+static json_t* node_to_json(const Node* n);
+static json_t* query_to_json(const Query* query);
+
+static json_t* rte_to_json(const RangeTblEntry* rte);
+
+static json_t *list_to_json(List *l) {
+  json_t *list_json = json_array();
+  ListCell *cell;
+  foreach (cell, l) {
+    Node *cn = lfirst(cell);
+    json_array_append(list_json, node_to_json(cn));
   }
-  return buffer;
+  return list_json;
 }
 
-void print_query(Query *query) {
+static json_t *node_to_json(const Node *n) {
+  json_t *ret;
+  if (!n) return json_null();
+  switch (n->type) {
+  case T_Alias: {
+    Alias *alias = (Alias *)n;
+    ret = json_pack("{}");
+    json_object_set(ret, "name", json_string(alias->aliasname));
+    json_object_set(ret, "cols", list_to_json(alias->colnames));
+    break;
+  }
+  case T_String: {
+    String *str = (String *)n;
+    ret = json_string(str->sval);
+    break;
+  }
+  case T_RangeTblEntry: {
+    ret = rte_to_json((RangeTblEntry *)n);
+    break;
+  }
+  default:
+    ret = json_null();
+    break;
+  }
+  return ret;
+}
+
+static json_t* rte_to_json(const RangeTblEntry* rte) {
+  json_t *rte_json = json_pack("{}");
+  json_object_set(rte_json, "eref alias", node_to_json((Node*)rte->eref));
+  json_object_set(rte_json, "alias", node_to_json((Node*)rte->alias));
+
+  json_object_set(rte_json, "rel id", json_integer(rte->relid));
+
+  json_object_set(rte_json, "rel kind", json_integer(rte->relkind));
+  json_object_set(rte_json, "rel kind str", json_string(get_rel_kind_str(rte->relkind)));
+
+  json_object_set(rte_json, "rte kind", json_integer(rte->rtekind));
+  json_object_set(rte_json, "rte kind str", json_string(get_rte_kind_str(rte->rtekind)));
+
+  json_object_set(rte_json, "in from clause", json_integer(rte->inFromCl));
+  json_object_set(rte_json, "join type", json_string(get_join_type_str(rte->jointype)));
+  json_object_set(rte_json, "num of merged join columns", json_integer(rte->joinmergedcols));
+
+  json_object_set(rte_json, "lateral", json_integer(rte->lateral));
+  json_object_set(rte_json, "inh", json_integer(rte->inh));
+  json_object_set(rte_json, "ephemeral named relation", json_string(rte->enrname));
+  json_object_set(rte_json, "rel lock mode", json_string(get_rel_lock_mode_str(rte->rellockmode)));
+  //json_object_set(rte_json, "table sample", json_t *value);
+  json_object_set(rte_json, "is from security barrier view", json_integer(rte->security_barrier));
+
+  if (rte->rtekind == RTE_SUBQUERY) {
+    json_t *subquery = query_to_json(rte->subquery);
+    json_object_set(rte_json, "subquery", subquery);
+  }
+
+  return rte_json;
+}
+
+static void print_from_expr(const FromExpr *from_expr, const char *prefix) {
   ListCell *lc;
-  elog(INFO,
-       "query id: [%ld], can set tag: [%d], has agg: [%d], has window func: "
-       "[%d], has set returning funcs: [%d], has sublinks: [%d], has distinct on: [%d]",
-       query->queryId, query->canSetTag, query->hasAggs, query->hasWindowFuncs,
-       query->hasTargetSRFs, query->hasSubLinks, query->hasDistinctOn);
-  elog(INFO, "has for update: [%d], has row secruity: [%d]", query->hasForUpdate, query->hasRowSecurity);
-  foreach (lc, query->rtable) {
-    RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
-    elog(INFO,
-         "range table entry ref name: [%s] alias: [%s], rel_id: [%d], "
-         "rel_kind: [%d:%s], "
-         "rtekind: [%d:%s]",
-         rte->eref ? rte->eref->aliasname : "",
-         rte->alias ? rte->alias->aliasname : "", rte->relid, rte->relkind,
-         get_rel_kind_str(rte->relkind), rte->rtekind,
-         get_rte_kind_str(rte->rtekind));
-
-    elog(INFO,
-         "in from clause: [%d] join type: [%s], num of merged join columns: "
-         "[%d]",
-         rte->inFromCl, get_join_type_str(rte->jointype), rte->joinmergedcols);
-
-    if (rte->alias) {
-	  elog(INFO, "alias col: %s", print_colnames(rte->alias->colnames));
-    }
-    if (rte->eref) {
-	  elog(INFO, "eref col: %s", print_colnames(rte->eref->colnames));
-    }
-    elog(INFO,
-         "lateral: [%d], inh: [%d], ephemeral named relation: [%s], rel lock "
-         "mode: [%s], tablesample: [%p], is from security barrier view: [%d]",
-         rte->lateral, rte->inh, rte->enrname,
-         get_rel_lock_mode_str(rte->rellockmode), rte->tablesample,
-         rte->security_barrier);
-    if (rte->rtekind == RTE_SUBQUERY) {
-      elog(INFO, "-----sub query-----");
-      print_query(rte->subquery);
-      elog(INFO, "-----sub query-----");
+  int i;
+  i = 0;
+  foreach (lc, from_expr->fromlist) {
+    elog(INFO, "%s--from expr:%d", prefix, i++);
+    Node *n = lfirst_node(Node, lc);
+    if (IsA(n, RangeTblRef)) {
+      RangeTblRef *rtr = (RangeTblRef *)n;
+      elog(INFO, "%srange tbl ref to: %d", prefix, rtr->rtindex);
+    } else if (IsA(n, JoinExpr)) {
+      JoinExpr *je = (JoinExpr *)n;
+      elog(INFO, "%sjoin expr jointype: %s, is Natural: %d", prefix,
+           get_join_type_str(je->jointype), je->isNatural);
+    } else {
+      elog(INFO, "%ssome type of expr in from expr not handled: [%d]", prefix,
+           n->type);
     }
   }
+}
+
+static json_t* query_to_json(const Query* query) {
+  ListCell *lc;
+  json_t *json = json_pack("{}");
+  json_t *rtable_list = json_array();
+
+  json_object_set(json, "query_id", json_integer(query->queryId));
+  json_object_set(json, "can_set_tag", json_boolean(query->canSetTag));
+  json_object_set(json, "has_agg", json_boolean(query->hasAggs));
+  json_object_set(json, "has_window_func", json_boolean(query->hasWindowFuncs));
+  json_object_set(json, "has_set_returning_funcs", json_boolean(query->hasTargetSRFs));
+  json_object_set(json, "has_sublinks", json_boolean(query->hasSubLinks));
+  json_object_set(json, "has distinct on", json_boolean(query->hasDistinctOn));
+  json_object_set(json, "has for update", json_boolean(query->hasForUpdate));
+  json_object_set(json, "has row security", json_boolean(query->hasRowSecurity));
+
+  json_object_set(json, "rtable", rtable_list);
+  foreach(lc, query->rtable) {
+    json_array_append(rtable_list, node_to_json(lfirst_node(Node, lc)));
+  }
+  return json;
+}
+
+void print_query(Query *query, const char *prefix) {
+
+  json_t *json = query_to_json(query);
+  elog(INFO, "%s", json_dumps(json, JSON_INDENT(2)));
+  json_decref(json);
 }

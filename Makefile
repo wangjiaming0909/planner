@@ -8,6 +8,7 @@ OBJS = \
 PGFILEDESC = "planner"
 
 TAP_TESTS = 1
+SHLIB_LINK += -ljansson
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config
