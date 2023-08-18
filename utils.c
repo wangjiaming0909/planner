@@ -139,7 +139,7 @@ static const char *get_join_type_str(JoinType join_type) {
   }
 }
 
-static const char* get_bool_expr_type_str(BoolExprType type) {
+static const char *get_bool_expr_type_str(BoolExprType type) {
   switch (type) {
   case AND_EXPR:
     return "AND";
@@ -151,10 +151,10 @@ static const char* get_bool_expr_type_str(BoolExprType type) {
   return "unknown bool expr";
 }
 
-static json_t* node_to_json(const Node* n);
-static json_t* query_to_json(const Query* query);
+static json_t *node_to_json(const Node *n);
+static json_t *query_to_json(const Query *query);
 
-static json_t* rte_to_json(const RangeTblEntry* rte);
+static json_t *rte_to_json(const RangeTblEntry *rte);
 
 static json_t *list_to_json(List *l) {
   json_t *list_json = json_array();
@@ -166,30 +166,37 @@ static json_t *list_to_json(List *l) {
   return list_json;
 }
 
-static json_t* rte_to_json(const RangeTblEntry* rte) {
+static json_t *rte_to_json(const RangeTblEntry *rte) {
   json_t *rte_json = json_pack("{}");
   json_object_set(rte_json, "type", json_string("rte"));
-  json_object_set(rte_json, "eref alias", node_to_json((Node*)rte->eref));
-  json_object_set(rte_json, "alias", node_to_json((Node*)rte->alias));
+  json_object_set(rte_json, "eref alias", node_to_json((Node *)rte->eref));
+  json_object_set(rte_json, "alias", node_to_json((Node *)rte->alias));
 
   json_object_set(rte_json, "rel id", json_integer(rte->relid));
 
   json_object_set(rte_json, "rel kind", json_integer(rte->relkind));
-  json_object_set(rte_json, "rel kind str", json_string(get_rel_kind_str(rte->relkind)));
+  json_object_set(rte_json, "rel kind str",
+                  json_string(get_rel_kind_str(rte->relkind)));
 
   json_object_set(rte_json, "rte kind", json_integer(rte->rtekind));
-  json_object_set(rte_json, "rte kind str", json_string(get_rte_kind_str(rte->rtekind)));
+  json_object_set(rte_json, "rte kind str",
+                  json_string(get_rte_kind_str(rte->rtekind)));
 
   json_object_set(rte_json, "in from clause", json_integer(rte->inFromCl));
-  json_object_set(rte_json, "join type", json_string(get_join_type_str(rte->jointype)));
-  json_object_set(rte_json, "num of merged join columns", json_integer(rte->joinmergedcols));
+  json_object_set(rte_json, "join type",
+                  json_string(get_join_type_str(rte->jointype)));
+  json_object_set(rte_json, "num of merged join columns",
+                  json_integer(rte->joinmergedcols));
 
   json_object_set(rte_json, "lateral", json_integer(rte->lateral));
   json_object_set(rte_json, "inh", json_integer(rte->inh));
-  json_object_set(rte_json, "ephemeral named relation", json_string(rte->enrname));
-  json_object_set(rte_json, "rel lock mode", json_string(get_rel_lock_mode_str(rte->rellockmode)));
-  //json_object_set(rte_json, "table sample", json_t *value);
-  json_object_set(rte_json, "is from security barrier view", json_integer(rte->security_barrier));
+  json_object_set(rte_json, "ephemeral named relation",
+                  json_string(rte->enrname));
+  json_object_set(rte_json, "rel lock mode",
+                  json_string(get_rel_lock_mode_str(rte->rellockmode)));
+  // json_object_set(rte_json, "table sample", json_t *value);
+  json_object_set(rte_json, "is from security barrier view",
+                  json_integer(rte->security_barrier));
 
   if (rte->rtekind == RTE_SUBQUERY) {
     json_t *subquery = query_to_json(rte->subquery);
@@ -199,10 +206,11 @@ static json_t* rte_to_json(const RangeTblEntry* rte) {
   return rte_json;
 }
 
-static json_t* from_expr_to_json(const FromExpr* expr) {
-  json_t* expr_json = json_pack("{}");
+static json_t *from_expr_to_json(const FromExpr *expr) {
+  json_t *expr_json = json_pack("{}");
   json_object_set(expr_json, "type", json_string("FromExpr"));
-  json_object_set(expr_json, "from list refs to rt", list_to_json(expr->fromlist));
+  json_object_set(expr_json, "from list refs to rt",
+                  list_to_json(expr->fromlist));
   json_object_set(expr_json, "quals", node_to_json(expr->quals));
   return expr_json;
 }
@@ -231,14 +239,12 @@ static json_t *join_expr_to_json(const JoinExpr *expr) {
   return ret;
 }
 
-static json_t* oid_to_json(Oid oid) {
-	return json_integer(oid);
-}
+static json_t *oid_to_json(Oid oid) { return json_integer(oid); }
 
 static json_t *bool_expr_to_json(const BoolExpr *expr) {
   json_t *ret = json_pack("{}");
   json_object_set(ret, "type", json_string("BoolExpr"));
-  //json_object_set(ret, "expr", node_to_json((Node *)&expr->xpr));
+  // json_object_set(ret, "expr", node_to_json((Node *)&expr->xpr));
   json_object_set(ret, "oper",
                   json_string(get_bool_expr_type_str(expr->boolop)));
   json_object_set(ret, "args", list_to_json(expr->args));
@@ -276,53 +282,53 @@ static json_t *var_to_json(const Var *var) {
   return ret;
 }
 
-static json_t* const_to_json(const Const* c) {
-	json_t *ret = json_pack("{}");
-	json_object_set(ret, "type", json_string("Const"));
-	json_object_set(ret, "consttype", oid_to_json(c->consttype));
-	json_object_set(ret, "consttypemod", json_integer(c->consttypmod));
-	json_object_set(ret, "collid", json_integer(c->constcollid));
-	json_object_set(ret, "len", json_integer(c->constlen));
-	// value
-	json_object_set(ret, "isNull", json_boolean(c->constisnull));
-	json_object_set(ret, "passbyval", json_boolean(c->constbyval));
-	json_object_set(ret, "location", json_integer(c->location));
-	return ret;
+static json_t *const_to_json(const Const *c) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("Const"));
+  json_object_set(ret, "consttype", oid_to_json(c->consttype));
+  json_object_set(ret, "consttypemod", json_integer(c->consttypmod));
+  json_object_set(ret, "collid", json_integer(c->constcollid));
+  json_object_set(ret, "len", json_integer(c->constlen));
+  // value
+  json_object_set(ret, "isNull", json_boolean(c->constisnull));
+  json_object_set(ret, "passbyval", json_boolean(c->constbyval));
+  json_object_set(ret, "location", json_integer(c->location));
+  return ret;
 }
 
-static json_t* te_to_json(const TargetEntry* te) {
-	json_t *ret = json_pack("{}");
-	json_object_set(ret, "type", json_string("TargetEntry"));
-	json_object_set(ret, "expr", node_to_json((Node*)te->expr));
-	json_object_set(ret, "resno", json_integer(te->resno));
-	json_object_set(ret, "resname", json_string(te->resname));
-	json_object_set(ret, "ref by sort/group", json_integer(te->ressortgroupref));
-	json_object_set(ret, "col oid in orignal tb", oid_to_json(te->resorigtbl));
-	json_object_set(ret, "colno in source tb", json_integer(te->resorigcol));
-	json_object_set(ret, "junk", json_boolean(te->resjunk));
-	return ret;
+static json_t *te_to_json(const TargetEntry *te) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("TargetEntry"));
+  json_object_set(ret, "expr", node_to_json((Node *)te->expr));
+  json_object_set(ret, "resno", json_integer(te->resno));
+  json_object_set(ret, "resname", json_string(te->resname));
+  json_object_set(ret, "ref by sort/group", json_integer(te->ressortgroupref));
+  json_object_set(ret, "col oid in orignal tb", oid_to_json(te->resorigtbl));
+  json_object_set(ret, "colno in source tb", json_integer(te->resorigcol));
+  json_object_set(ret, "junk", json_boolean(te->resjunk));
+  return ret;
 }
 
-static json_t* sort_group_clause_to_json(const SortGroupClause* clause) {
-	json_t *ret = json_pack("{}");
-	json_object_set(ret, "type", json_string("SortGroupClause"));
-	json_object_set(ret, "ref to tl", json_integer(clause->tleSortGroupRef));
-	json_object_set(ret, "eq op", oid_to_json(clause->eqop));
-	json_object_set(ret, "sort op", oid_to_json(clause->sortop));
-	json_object_set(ret, "nulls_first", json_boolean(clause->nulls_first));
-	json_object_set(ret, "hashable", json_boolean(clause->hashable));
-	return ret;
+static json_t *sort_group_clause_to_json(const SortGroupClause *clause) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("SortGroupClause"));
+  json_object_set(ret, "ref to tl", json_integer(clause->tleSortGroupRef));
+  json_object_set(ret, "eq op", oid_to_json(clause->eqop));
+  json_object_set(ret, "sort op", oid_to_json(clause->sortop));
+  json_object_set(ret, "nulls_first", json_boolean(clause->nulls_first));
+  json_object_set(ret, "hashable", json_boolean(clause->hashable));
+  return ret;
 }
 
 static json_t *node_to_json(const Node *n) {
   json_t *ret;
   if (!n)
     return json_null();
-        switch (n->type) {
-        case T_Alias: {
+  switch (n->type) {
+  case T_Alias: {
     Alias *alias = (Alias *)n;
     ret = json_pack("{}");
-	json_object_set(ret, "type", json_string("Alias"));
+    json_object_set(ret, "type", json_string("Alias"));
     json_object_set(ret, "name", json_string(alias->aliasname));
     json_object_set(ret, "cols", list_to_json(alias->colnames));
     break;
@@ -338,7 +344,7 @@ static json_t *node_to_json(const Node *n) {
   }
   case T_FromExpr: {
     FromExpr *expr = (FromExpr *)n;
-	ret = from_expr_to_json(expr);
+    ret = from_expr_to_json(expr);
     break;
   }
   case T_RangeTblRef: {
@@ -363,22 +369,22 @@ static json_t *node_to_json(const Node *n) {
   }
   case T_Var: {
     Var *var = (Var *)n;
-	ret = var_to_json(var);
+    ret = var_to_json(var);
     break;
   }
   case T_Const: {
     Const *c = (Const *)n;
-	ret = const_to_json(c);
+    ret = const_to_json(c);
     break;
   }
   case T_TargetEntry: {
     TargetEntry *te = (TargetEntry *)n;
-	ret = te_to_json(te);
+    ret = te_to_json(te);
     break;
   }
   case T_SortGroupClause: {
     SortGroupClause *clause = (SortGroupClause *)n;
-	ret = sort_group_clause_to_json(clause);
+    ret = sort_group_clause_to_json(clause);
     break;
   }
   default:
@@ -397,18 +403,21 @@ static json_t *query_to_json(const Query *query) {
   json_object_set(json, "can_set_tag", json_boolean(query->canSetTag));
   json_object_set(json, "has_agg", json_boolean(query->hasAggs));
   json_object_set(json, "has_window_func", json_boolean(query->hasWindowFuncs));
-  json_object_set(json, "has_set_returning_funcs", json_boolean(query->hasTargetSRFs));
+  json_object_set(json, "has_set_returning_funcs",
+                  json_boolean(query->hasTargetSRFs));
   json_object_set(json, "has_sublinks", json_boolean(query->hasSubLinks));
   json_object_set(json, "has distinct on", json_boolean(query->hasDistinctOn));
   json_object_set(json, "has for update", json_boolean(query->hasForUpdate));
-  json_object_set(json, "has row security", json_boolean(query->hasRowSecurity));
+  json_object_set(json, "has row security",
+                  json_boolean(query->hasRowSecurity));
 
   json_object_set(json, "rtable", rtable_list);
-  foreach(lc, query->rtable) {
+  foreach (lc, query->rtable) {
     json_array_append(rtable_list, node_to_json(lfirst_node(Node, lc)));
   }
   json_object_set(json, "jointree", node_to_json((Node *)query->jointree));
-  json_object_set(json, "mergeActionList", list_to_json(query->mergeActionList));
+  json_object_set(json, "mergeActionList",
+                  list_to_json(query->mergeActionList));
   json_object_set(json, "targetlist", list_to_json(query->targetList));
   json_object_set(json, "returning list", list_to_json(query->returningList));
   json_object_set(json, "group", list_to_json(query->groupClause));
@@ -428,7 +437,7 @@ static json_t *query_to_json(const Query *query) {
 void print_query(Query *query) {
 
   json_t *json = query_to_json(query);
-  //elog(INFO, "%s", json_dumps(json, JSON_INDENT(2)));
+  // elog(INFO, "%s", json_dumps(json, JSON_INDENT(2)));
   json_dump_file(json, "/tmp/query.json", JSON_COMPACT);
   json_decref(json);
 }
