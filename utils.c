@@ -160,6 +160,43 @@ static json_t *bitmapset_to_json(const Bitmapset *bm) {
   return arr;
 }
 
+static const char *get_sublink_type_str(SubLinkType type) {
+  switch (type) {
+  case ALL_SUBLINK:
+	  return "ALL_SUBLINK";
+  case ANY_SUBLINK:
+	  return "ANY_SUBLINK";
+  case ROWCOMPARE_SUBLINK:
+	  return "ROWCOMPARE_SUBLINK";
+  case EXPR_SUBLINK:
+	  return "EXPR_SUBLINK";
+  case MULTIEXPR_SUBLINK:
+	  return "MULTIEXPR_SUBLINK";
+  case ARRAY_SUBLINK:
+	  return "ARRAY_SUBLINK";
+  case CTE_SUBLINK:
+	  return "CTE_SUBLINK";
+  default:
+    break;
+  }
+  return "";
+}
+
+static const char *get_param_kind_str(ParamKind kind) {
+  switch (kind) {
+  case PARAM_EXTERN:
+    return "PARAM_EXTERN";
+  case PARAM_EXEC:
+    return "PARAM_EXEC";
+  case PARAM_MULTIEXPR:
+    return "PARAM_MULTIEXPR";
+  case PARAM_SUBLINK:
+    return "PARAM_SUBLINK";
+  default:
+    return "";
+  }
+}
+
 static json_t *node_to_json(const Node *n);
 static json_t *query_to_json(const Query *query);
 
@@ -402,6 +439,31 @@ static json_t *win_clause_to_json(const WindowClause* wc) {
 	return ret;
 }
 
+static json_t *sublink_to_json(const SubLink *sublink) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("SubLink"));
+  json_object_set(ret, "sublink_type",
+                  json_string(get_sublink_type_str(sublink->subLinkType)));
+  json_object_set(ret, "sublink id", json_integer(sublink->subLinkId));
+  json_object_set(ret, "test expr", node_to_json(sublink->testexpr));
+  json_object_set(ret, "op name", list_to_json(sublink->operName));
+  json_object_set(ret, "sub select", node_to_json(sublink->subselect));
+  json_object_set(ret, "location", json_integer(sublink->location));
+  return ret;
+}
+
+static json_t *param_to_json(const Param *param) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("Param"));
+  json_object_set(ret, "param kind",
+                  json_string(get_param_kind_str(param->paramkind)));
+  json_object_set(ret, "param id", json_integer(param->paramid));
+  json_object_set(ret, "param type", oid_to_json(param->paramtype));
+  json_object_set(ret, "param type mode", json_integer(param->paramtypmod));
+  json_object_set(ret, "param coll id", oid_to_json(param->paramcollid));
+  return ret;
+}
+
 static json_t *node_to_json(const Node *n) {
   json_t *ret;
   if (!n)
@@ -492,6 +554,21 @@ static json_t *node_to_json(const Node *n) {
   case T_WindowClause: {
     WindowClause *wc = (WindowClause *)n;
     ret = win_clause_to_json(wc);
+    break;
+  }
+  case T_SubLink: {
+    SubLink *sublink = (SubLink *)n;
+	ret = sublink_to_json(sublink);
+    break;
+  }
+  case T_Param: {
+    Param *param = (Param *)n;
+    ret = param_to_json(param);
+    break;
+  }
+  case T_Query: {
+    Query *q = (Query *)n;
+    ret = query_to_json(q);
     break;
   }
   default:
