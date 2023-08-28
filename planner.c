@@ -16,4 +16,13 @@ static PlannedStmt *my_planner(Query *parse, const char *query_string,
   return stmt;
 }
 
-void _PG_init(void) { planner_hook = my_planner; }
+static void create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
+                        RelOptInfo *input_rel, RelOptInfo *output_rel,
+                        void *extra) {
+  print_planner_info(root);
+}
+
+void _PG_init(void) {
+  planner_hook = my_planner;
+  create_upper_paths_hook = create_upper_paths;
+}
