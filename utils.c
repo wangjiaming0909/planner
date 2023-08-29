@@ -152,7 +152,7 @@ static const char *get_bool_expr_type_str(BoolExprType type) {
 }
 
 static json_t *bitmapset_to_json(const Bitmapset *bm) {
-  json_t* arr = json_array();
+  json_t *arr = json_array();
   int x = -1;
   while ((x = bms_next_member(bm, x)) >= 0) {
     json_array_append(arr, json_integer(x));
@@ -163,19 +163,19 @@ static json_t *bitmapset_to_json(const Bitmapset *bm) {
 static const char *get_sublink_type_str(SubLinkType type) {
   switch (type) {
   case ALL_SUBLINK:
-	  return "ALL_SUBLINK";
+    return "ALL_SUBLINK";
   case ANY_SUBLINK:
-	  return "ANY_SUBLINK";
+    return "ANY_SUBLINK";
   case ROWCOMPARE_SUBLINK:
-	  return "ROWCOMPARE_SUBLINK";
+    return "ROWCOMPARE_SUBLINK";
   case EXPR_SUBLINK:
-	  return "EXPR_SUBLINK";
+    return "EXPR_SUBLINK";
   case MULTIEXPR_SUBLINK:
-	  return "MULTIEXPR_SUBLINK";
+    return "MULTIEXPR_SUBLINK";
   case ARRAY_SUBLINK:
-	  return "ARRAY_SUBLINK";
+    return "ARRAY_SUBLINK";
   case CTE_SUBLINK:
-	  return "CTE_SUBLINK";
+    return "CTE_SUBLINK";
   default:
     break;
   }
@@ -192,6 +192,27 @@ static const char *get_param_kind_str(ParamKind kind) {
     return "PARAM_MULTIEXPR";
   case PARAM_SUBLINK:
     return "PARAM_SUBLINK";
+  default:
+    return "";
+  }
+}
+
+static const char *get_rel_opt_kind_str(RelOptKind kind) {
+  switch (kind) {
+  case RELOPT_OTHER_MEMBER_REL:
+    return "RELOPT_OTHER_MEMBER_REL";
+  case RELOPT_BASEREL:
+    return "RELOPT_BASEREL";
+  case RELOPT_JOINREL:
+    return "RELOPT_JOINREL";
+  case RELOPT_OTHER_JOINREL:
+    return "RELOPT_OTHER_JOINREL";
+  case RELOPT_UPPER_REL:
+    return "RELOPT_UPPER_REL";
+  case RELOPT_OTHER_UPPER_REL:
+    return "RELOPT_OTHER_UPPER_REL";
+  case RELOPT_DEADREL:
+    return "RELOPT_DEADREL";
   default:
     return "";
   }
@@ -367,7 +388,10 @@ static json_t *sort_group_clause_to_json(const SortGroupClause *clause) {
 }
 
 static json_t *pointer_array_to_json(Node **node_arr, int size) {
-  json_t *ret = json_array();
+  json_t *ret;
+  if (!node_arr)
+    return NULL;
+  ret = json_array();
   for (int i = 0; i < size; ++i) {
     json_array_append(ret, node_to_json(node_arr[i]));
   }
@@ -383,12 +407,21 @@ static json_t *planner_info_to_json(const PlannerInfo *root) {
   json_object_set(ret, "parent", node_to_json((Node *)root->parent_root));
   json_object_set(ret, "plan params", list_to_json(root->plan_params));
   json_object_set(ret, "outer params", bitmapset_to_json(root->outer_params));
+  json_object_set(ret, "processed tlist", list_to_json(root->processed_tlist));
   json_object_set(ret, "simple rel arr size",
                   json_integer(root->simple_rel_array_size));
   json_object_set(ret, "simple rels",
                   pointer_array_to_json((Node **)root->simple_rel_array,
                                         root->simple_rel_array_size));
-  json_object_set(ret, "processed tlist", list_to_json(root->processed_tlist));
+  json_object_set(ret, "simple rte array",
+                  pointer_array_to_json((Node **)root->simple_rte_array,
+                                        root->simple_rel_array_size));
+  json_object_set(ret, "append rel array",
+                  pointer_array_to_json((Node **)root->append_rel_array,
+                                        root->simple_rel_array_size));
+  json_object_set(ret, "all base rels", bitmapset_to_json(root->all_baserels));
+  json_object_set(ret, "nullable base rels", bitmapset_to_json(root->nullable_baserels));
+  json_object_set(ret, "join_rel_list", list_to_json(root->join_rel_list));
   return ret;
 }
 
@@ -399,10 +432,13 @@ static json_t *planner_global_to_json(const PlannerGlobal *planner_global) {
 
 static json_t *rel_opt_info_to_json(const RelOptInfo *rel_opt_info) {
   json_t *ret = json_pack("{}");
+  json_object_set(ret, "relopt kind",
+                  json_string(get_rel_opt_kind_str(rel_opt_info->reloptkind)));
+  json_object_set(ret, "rel ids", bitmapset_to_json(rel_opt_info->relids));
   return ret;
 }
 
-static json_t *win_func_to_json(const WindowFunc* wf) {
+static json_t *win_func_to_json(const WindowFunc *wf) {
   json_t *ret = json_pack("{}");
   json_object_set(ret, "type", json_string("WindowFunc"));
   json_object_set(ret, "winfnoid", oid_to_json(wf->winfnoid));
@@ -410,7 +446,7 @@ static json_t *win_func_to_json(const WindowFunc* wf) {
   json_object_set(ret, "win_coll_id", oid_to_json(wf->wincollid));
   json_object_set(ret, "input_coll_id", oid_to_json(wf->inputcollid));
   json_object_set(ret, "args", list_to_json(wf->args));
-  json_object_set(ret, "agg_filter", node_to_json((Node*)wf->aggfilter));
+  json_object_set(ret, "agg_filter", node_to_json((Node *)wf->aggfilter));
   json_object_set(ret, "win_ref", json_integer(wf->winref));
   json_object_set(ret, "winstar", json_boolean(wf->winstar));
   json_object_set(ret, "winagg", json_boolean(wf->winagg));
@@ -418,25 +454,27 @@ static json_t *win_func_to_json(const WindowFunc* wf) {
   return ret;
 }
 
-static json_t *win_clause_to_json(const WindowClause* wc) {
-	json_t *ret = json_pack("{}");
-	json_object_set(ret, "type", json_string("WindowClause"));
-	json_object_set(ret, "name", json_string(wc->name));
-	json_object_set(ret, "refname", json_string(wc->refname));
-	json_object_set(ret, "partition list", list_to_json(wc->partitionClause));
-	json_object_set(ret, "order list", list_to_json(wc->orderClause));
-	json_object_set(ret, "frame opt", json_integer(wc->frameOptions));
-	json_object_set(ret, "start offset", node_to_json(wc->startOffset));
-	json_object_set(ret, "end offset", node_to_json(wc->endOffset));
-	json_object_set(ret, "run cond", list_to_json(wc->runCondition));
-	json_object_set(ret, "start in range func", oid_to_json(wc->startInRangeFunc));
-	json_object_set(ret, "end in range func", oid_to_json(wc->endInRangeFunc));
-	json_object_set(ret, "in range coll", oid_to_json(wc->inRangeColl));
-	json_object_set(ret, "in range asc", json_boolean(wc->inRangeAsc));
-	json_object_set(ret, "in range nulls first", json_boolean(wc->inRangeNullsFirst));
-	json_object_set(ret, "win ref", json_integer(wc->winref));
-	json_object_set(ret, "copied order", json_boolean(wc->copiedOrder));
-	return ret;
+static json_t *win_clause_to_json(const WindowClause *wc) {
+  json_t *ret = json_pack("{}");
+  json_object_set(ret, "type", json_string("WindowClause"));
+  json_object_set(ret, "name", json_string(wc->name));
+  json_object_set(ret, "refname", json_string(wc->refname));
+  json_object_set(ret, "partition list", list_to_json(wc->partitionClause));
+  json_object_set(ret, "order list", list_to_json(wc->orderClause));
+  json_object_set(ret, "frame opt", json_integer(wc->frameOptions));
+  json_object_set(ret, "start offset", node_to_json(wc->startOffset));
+  json_object_set(ret, "end offset", node_to_json(wc->endOffset));
+  json_object_set(ret, "run cond", list_to_json(wc->runCondition));
+  json_object_set(ret, "start in range func",
+                  oid_to_json(wc->startInRangeFunc));
+  json_object_set(ret, "end in range func", oid_to_json(wc->endInRangeFunc));
+  json_object_set(ret, "in range coll", oid_to_json(wc->inRangeColl));
+  json_object_set(ret, "in range asc", json_boolean(wc->inRangeAsc));
+  json_object_set(ret, "in range nulls first",
+                  json_boolean(wc->inRangeNullsFirst));
+  json_object_set(ret, "win ref", json_integer(wc->winref));
+  json_object_set(ret, "copied order", json_boolean(wc->copiedOrder));
+  return ret;
 }
 
 static json_t *sublink_to_json(const SubLink *sublink) {
@@ -558,7 +596,7 @@ static json_t *node_to_json(const Node *n) {
   }
   case T_SubLink: {
     SubLink *sublink = (SubLink *)n;
-	ret = sublink_to_json(sublink);
+    ret = sublink_to_json(sublink);
     break;
   }
   case T_Param: {
@@ -581,9 +619,10 @@ static json_t *node_to_json(const Node *n) {
 static json_t *query_to_json(const Query *query) {
   ListCell *lc;
   json_t *json = json_pack("{}");
-  json_t* rtable_list;
+  json_t *rtable_list;
 
-  if (!query) return json;
+  if (!query)
+    return json;
   rtable_list = json_array();
 
   json_object_set(json, "query_id", json_integer(query->queryId));
@@ -629,7 +668,7 @@ void print_query(const Query *query) {
 }
 
 void print_planner_info(const PlannerInfo *root) {
-  json_t *json = node_to_json((Node*)root);
+  json_t *json = node_to_json((Node *)root);
   json_dump_file(json, "/tmp/planner_info.json", JSON_INDENT(2));
   json_decref(json);
 }
